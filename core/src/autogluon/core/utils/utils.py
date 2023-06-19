@@ -33,7 +33,14 @@ logger = logging.getLogger(__name__)
 
 
 class CVSplitter:
-    def __init__(self, splitter_cls=None, n_splits=5, n_repeats=1, random_state=0, stratified=False, groups=None):
+    def __init__(self,
+                 splitter_cls=None,
+                 splitter_params=None,
+                 n_splits=5,
+                 n_repeats=1,
+                 random_state=0,
+                 stratified=False,
+                 groups=None):
         self.n_splits = n_splits
         self.n_repeats = n_repeats
         self.random_state = random_state
@@ -41,7 +48,7 @@ class CVSplitter:
         self.groups = groups
         if splitter_cls is None:
             splitter_cls = self._get_splitter_cls()
-        self._splitter = self._get_splitter(splitter_cls)
+        self._splitter = self._get_splitter(splitter_cls, splitter_params)
 
     def _get_splitter_cls(self):
         if self.groups is not None:
@@ -57,13 +64,16 @@ class CVSplitter:
             splitter_cls = RepeatedKFold
         return splitter_cls
 
-    def _get_splitter(self, splitter_cls):
+    def _get_splitter(self, splitter_cls, splitter_params):
         if splitter_cls == LeaveOneGroupOut:
             return splitter_cls()
         elif splitter_cls in [RepeatedKFold, RepeatedStratifiedKFold]:
             return splitter_cls(n_splits=self.n_splits, n_repeats=self.n_repeats, random_state=self.random_state)
         else:
-            raise AssertionError(f"{splitter_cls} is not supported as a valid `splitter_cls` input to CVSplitter.")
+            if splitter_params is None: splitter_params = {}
+            logger.warning("use custom CVSplitter %s(%s)", splitter_cls.__name__, 
+                           ', '.join([f'{k}={v}' for k,v in splitter_params.items()]))
+            return splitter_cls(n_splits=self.n_splits, **splitter_params)
 
     def split(self, X, y):
         if isinstance(self._splitter, RepeatedStratifiedKFold):

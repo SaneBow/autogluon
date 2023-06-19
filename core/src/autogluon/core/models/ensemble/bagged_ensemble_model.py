@@ -168,8 +168,9 @@ class BaggedEnsembleModel(AbstractModel):
         else:
             return X
 
-    def _get_cv_splitter(self, n_splits, n_repeats, groups=None):
-        return CVSplitter(n_splits=n_splits, n_repeats=n_repeats, groups=groups, stratified=self.is_stratified(), random_state=self._random_state)
+    def _get_cv_splitter(self, n_splits, n_repeats, groups=None, splitter_cls=None, splitter_params=None):
+        return CVSplitter(splitter_cls=splitter_cls, splitter_params=splitter_params,
+                          n_splits=n_splits, n_repeats=n_repeats, groups=groups, stratified=self.is_stratified(), random_state=self._random_state)
 
     def _fit(
         self,
@@ -203,8 +204,9 @@ class BaggedEnsembleModel(AbstractModel):
         if k_fold is not None and k_fold < 1:
             k_fold = 1
         if k_fold is None or k_fold > 1:
-            k_fold = self._get_cv_splitter(n_splits=k_fold, n_repeats=n_repeats, groups=groups).n_splits
-        max_sets = self._get_model_params().get("max_sets", None)
+            k_fold = self._get_cv_splitter(n_splits=k_fold, n_repeats=n_repeats, groups=groups, 
+                splitter_cls=self.params.get('splitter_cls'), splitter_params=self.params.get('splitter_params')).n_splits
+        max_sets = self._get_model_params().get('max_sets', None)
         if max_sets is not None:
             if n_repeats > max_sets:
                 n_repeats = max_sets
@@ -513,17 +515,21 @@ class BaggedEnsembleModel(AbstractModel):
         # TODO: Preprocess data here instead of repeatedly
         # FIXME: Raise exception if multiclass/binary and a single val fold contains all instances of a class. (Can happen if custom groups is specified)
         time_start = time.time()
+        splitter_cls = self.params.get('splitter_cls')
+        splitter_params = self.params.get('splitter_params')
         if k_fold_start != 0:
             cv_splitter = self._cv_splitters[n_repeat_start]
         else:
-            cv_splitter = self._get_cv_splitter(n_splits=k_fold, n_repeats=n_repeats, groups=groups)
+            cv_splitter = self._get_cv_splitter(n_splits=k_fold, n_repeats=n_repeats, groups=groups,
+                                                splitter_cls=splitter_cls, splitter_params=splitter_params)
         if k_fold != cv_splitter.n_splits:
             k_fold = cv_splitter.n_splits
         if k_fold_end is None:
             k_fold_end = k_fold
         if cv_splitter.n_repeats < n_repeats:
             # If current cv_splitter doesn't have enough n_repeats for all folds, then create a new one.
-            cv_splitter = self._get_cv_splitter(n_splits=k_fold, n_repeats=n_repeats, groups=groups)
+            cv_splitter = self._get_cv_splitter(n_splits=k_fold, n_repeats=n_repeats, groups=groups,
+                                                splitter_cls=splitter_cls, splitter_params=splitter_params)
 
         fold_fit_args_list, n_repeats_started, n_repeats_finished = self._generate_fold_configs(
             X=X,
